@@ -1,25 +1,26 @@
 {
-  "name": "servervuesp",
-  "version": "1.0.0",
-  "description": "",
-  "main": "src.js",
+  "name": "alisa-npm",
+  "version": "1.1.1",
+  "description": "Controlling Alice via a WebSocket",
+  "main": "build/index.js",
   "scripts": {
     "build": "babel src --out-dir build",
     "dev": "nodemon src/index.js --exec babel-node",
     "start": "node build/index.js"
   },
+  "author": "bondrogeen",
+  "license": "MIT",
   "dependencies": {
-    "dotenv": "^8.2.0",
+    "node-dns-sd": "^0.4.2",
     "ws": "^8.2.2"
   },
   "devDependencies": {
+    "dotenv": "^10.0.0",
     "@babel/cli": "^7.12.1",
     "@babel/core": "^7.12.3",
     "@babel/node": "^7.12.1",
     "@babel/preset-env": "^7.12.1",
     "eslint": "^8.14.0",
     "nodemon": "^2.0.6"
-  },
-  "author": "bondrogeen@gmail.com",
-  "license": "MIT"
+  }
 }

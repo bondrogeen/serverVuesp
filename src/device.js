@@ -1,55 +1,99 @@
-import { EventEmitter } from 'node:events';
-import WebSocket from 'ws';
+import Client from './clientWS';
+import { throttle } from './utils';
 
-class Client extends EventEmitter {
-  constructor({ address = '', options = {} }) {
-    super();
-    this.address = address;
-    this.options = options;
-    this.ws = null;
-    this.interval = null;
-    this.time = new Date();
-    this.isConnect = false;
+class Device extends Client {
+  #id;
+  #ip;
+  #port;
+  #key;
+  #cert;
+  #token;
+  #platform;
+
+  constructor({ ip, port = 1961, platform, token, id = '', reconnect = 10000, cert = '', key = '' }) {
+    console.log(ip, port, token, id, reconnect, cert, key);
+    if (!token || !ip || !port) throw new Error('token | ip | port is undefined');
+    let options = { cert, key, rejectUnauthorized: false };
+    super({ address: `wss://${ip}:${port}`, reconnect, options });
+
+    this.#id = id;
+    this.#ip = ip;
+    this.#port = port;
+    this.#key = key;
+    this.#cert = cert;
+    this.#token = token;
+    this.#platform = platform;
+    this.fetchUpdateToken = null;
+    this.onThrottle = throttle(res => this.onMessage('message', res), 1000);
+    this.#init();
   }
-  connect() {
-    this.ws = new WebSocket(this.address, this.options);
-    this.ws.on('open', this.onOpen.bind(this));
-    this.ws.on('message', this.onMessage.bind(this));
-    this.ws.on('close', this.onClose.bind(this));
-    this.ws.on('error', this.onError.bind(this));
-    if (!this.interval) this.interval = setInterval(this.onPing.bind(this), 1000);
+
+  get id() {
+    return this.#id;
   }
-  disconnect() {
-    if (this.interval) clearInterval(this.interval);
-    this.ws = null;
-    this.emit('close');
+
+  get ip() {
+    return this.#ip;
   }
-  reconnect() {
-    this.emit('reconnect');
-    this.time = new Date().getTime();
-    this.connect();
+
+  #init() {
+    this.on('open', e => {
+      this.onMessage('open', e);
+      this.send({ command: 'ping' });
+    });
+
+    this.on('message', e => this.onThrottle(this.#parseMessage(e)));
+
+    this.on('close', e => {
+      if (e === 4000 && this.fetchUpdateToken) this.updateToken();
+      this.onMessage('close', e);
+    });
+
+    this.on('error', e => this.onMessage('error', e));
   }
-  onPing() {
-    const delta = new Date().getTime() - this.time;
-    this.emit('ping', delta);
-    this.isConnect = delta < 3000;
-    if (delta > 20000) this.reconnect();
+
+  async updateToken() {
+    const { status, token } = await this.fetchUpdateToken();
+    if ((status === 'ok', token)) this.setToken(token);
   }
-  onOpen() {
-    // this.ws.send('something');
+
+  #parseMessage(e) {
+    try {
+      return JSON.parse(e);
+    } catch (error) {
+      console.error(error);
+    }
   }
-  onMessage(data) {
-    this.time = new Date().getTime();
-    console.log('received: %s', new Date());
+
+  #getFormDate(payload) {
+    return {
+      conversationToken: this.#token,
+      id: this.#id,
+      payload,
+      sentTime: Date.now(),
+    };
   }
-  onClose() {
-    console.log('close');
-    this.emit('close');
+
+  #getSendData(type, data) {
+    return {
+      id: this.#id,
+      ip: this.#ip,
+      type,
+      data,
+    };
   }
-  onError(e) {
-    console.log(e);
-    this.emit('error', e);
+
+  setToken(token) {
+    this.#token = token;
+  }
+
+  send(payload) {
+    super.send(JSON.stringify(this.#getFormDate(payload)));
+  }
+
+  onMessage(type, data) {
+    this.emit('data', this.#getSendData(type, data));
   }
 }
 
-export default Client;
+export default Device;
